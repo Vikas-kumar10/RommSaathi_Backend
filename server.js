@@ -81,24 +81,39 @@ dotenv.config();
 
 const app = express();
 
-// Middleware
+// Allowed frontend origins
+const allowedOrigins = [
+  "http://localhost:5173",
+  process.env.CLIENT_URL,
+].filter(Boolean);
+
+// CORS middleware
 app.use(
   cors({
-    origin: [
-      "http://localhost:5173",
-      process.env.CLIENT_URL,
-    ].filter(Boolean),
+    origin: (origin, callback) => {
+      // Allow requests without an Origin header
+      if (!origin || allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+
+      return callback(new Error("Origin not allowed by CORS"));
+    },
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
     credentials: true,
   })
 );
 
+// Body parsing middleware
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // Database connection
-connectDB();
+connectDB().catch((error) => {
+  console.error("Database connection error:", error.message);
+});
 
-// Routes
+// API routes
 app.use("/api/auth", authRoutes);
 app.use("/api/rooms", roomRoutes);
 app.use("/api/requests", requestRoutes);
@@ -119,7 +134,7 @@ app.get("/", (req, res) => {
   });
 });
 
-// Local development only
+// Local development server
 if (process.env.NODE_ENV !== "production") {
   const PORT = process.env.PORT || 8000;
 
@@ -128,5 +143,5 @@ if (process.env.NODE_ENV !== "production") {
   });
 }
 
-// Export Express app for Vercel
+// Export app for Vercel
 export default app;
