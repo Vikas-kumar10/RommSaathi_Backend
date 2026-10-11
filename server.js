@@ -58,7 +58,6 @@
 
 
 
-
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
@@ -81,39 +80,19 @@ dotenv.config();
 
 const app = express();
 
-// Allowed frontend origins
-const allowedOrigins = [
-  "http://localhost:5173",
-  process.env.CLIENT_URL,
-].filter(Boolean);
-
-// CORS middleware
+// Middleware
 app.use(
   cors({
-    origin: (origin, callback) => {
-      // Allow requests without an Origin header
-      if (!origin || allowedOrigins.includes(origin)) {
-        return callback(null, true);
-      }
-
-      return callback(new Error("Origin not allowed by CORS"));
-    },
-    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization"],
-    credentials: true,
+    origin: process.env.CLIENT_URL
+      ? process.env.CLIENT_URL.split(",").map((url) => url.trim())
+      : true,
   })
 );
 
-// Body parsing middleware
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Database connection
-connectDB().catch((error) => {
-  console.error("Database connection error:", error.message);
-});
-
-// API routes
+// Routes
 app.use("/api/auth", authRoutes);
 app.use("/api/rooms", roomRoutes);
 app.use("/api/requests", requestRoutes);
@@ -130,18 +109,24 @@ app.use("/api/admin", adminRoutes);
 app.get("/", (req, res) => {
   res.status(200).json({
     success: true,
-    message: "RoomSaathi API is runningg",
+    message: "RoomSaathi API is running",
   });
 });
 
-// Local development server
-if (process.env.NODE_ENV !== "production") {
-  const PORT = process.env.PORT || 8000;
+// Start server after initiating database connection
+const PORT = process.env.PORT || 8000;
 
-  app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
-  });
+async function startServer() {
+  try {
+    await connectDB();
+
+    app.listen(PORT, "0.0.0.0", () => {
+      console.log(`RoomSaathi server running on port ${PORT}`);
+    });
+  } catch (error) {
+    console.error("Failed to start server:", error.message);
+    process.exit(1);
+  }
 }
 
-// Export app for Vercel
-export default app;
+startServer();
