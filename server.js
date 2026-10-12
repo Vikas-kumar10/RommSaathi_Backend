@@ -75,6 +75,7 @@ import reportRoutes from "./routes/report.routes.js";
 import complaintRoutes from "./routes/complaint.routes.js";
 import adminStatisticsRoutes from "./routes/adminStatistics.routes.js";
 import adminRoutes from "./routes/admin.routes.js";
+import adminAuthRoutes from "./routes/adminAuth.routes.js"
 
 dotenv.config();
 
@@ -104,6 +105,7 @@ app.use("/api/reports", reportRoutes);
 app.use("/api/complaints", complaintRoutes);
 app.use("/api/admin/statistics", adminStatisticsRoutes);
 app.use("/api/admin", adminRoutes);
+app.use("/api/admin/auth", adminAuthRoutes);
 
 // Health check
 app.get("/", (req, res) => {
