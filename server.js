@@ -75,18 +75,36 @@ import reportRoutes from "./routes/report.routes.js";
 import complaintRoutes from "./routes/complaint.routes.js";
 import adminStatisticsRoutes from "./routes/adminStatistics.routes.js";
 import adminRoutes from "./routes/admin.routes.js";
-import adminAuthRoutes from "./routes/adminAuth.routes.js"
+import adminAuthRoutes from "./routes/adminAuth.routes.js";
 
 dotenv.config();
 
 const app = express();
 
+// Allowed frontend origins
+const allowedOrigins = [
+  "http://localhost:5173",
+  ...(process.env.CLIENT_URL || "")
+    .split(",")
+    .map((url) => url.trim())
+    .filter(Boolean),
+];
+
 // Middleware
 app.use(
   cors({
-    origin: process.env.CLIENT_URL
-      ? process.env.CLIENT_URL.split(",").map((url) => url.trim())
-      : true,
+    origin: (origin, callback) => {
+      // Allow requests without an Origin header
+      if (!origin || allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+
+      return callback(
+        new Error(`CORS blocked for origin: ${origin}`)
+      );
+    },
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
   })
 );
 
@@ -115,7 +133,7 @@ app.get("/", (req, res) => {
   });
 });
 
-// Start server after initiating database connection
+// Start server after database connection
 const PORT = process.env.PORT || 8000;
 
 async function startServer() {
