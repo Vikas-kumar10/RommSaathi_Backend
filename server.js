@@ -56,8 +56,6 @@
 //   console.log(`Server running on port ${PORT}`);
 // });
 
-
-
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
@@ -99,13 +97,11 @@ app.use(
         return callback(null, true);
       }
 
-      return callback(
-        new Error(`CORS blocked for origin: ${origin}`)
-      );
+      return callback(new Error(`CORS blocked for origin: ${origin}`));
     },
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
-  })
+  }),
 );
 
 app.use(express.json());
