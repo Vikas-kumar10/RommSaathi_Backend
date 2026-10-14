@@ -56,6 +56,10 @@
 //   console.log(`Server running on port ${PORT}`);
 // });
 
+
+
+
+
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
@@ -79,35 +83,75 @@ dotenv.config();
 
 const app = express();
 
+// Trust proxy when deployed behind Render's proxy.
+app.set("trust proxy", 1);
+
 // Allowed frontend origins
 const allowedOrigins = [
   "http://localhost:5173",
+  "https://room-sathi-frontend.vercel.app",
   ...(process.env.CLIENT_URL || "")
     .split(",")
-    .map((url) => url.trim())
+    .map((url) => url.trim().replace(/\/+$/, ""))
     .filter(Boolean),
 ];
 
-// Middleware
+// CORS: register only once, before routes
 app.use(
   cors({
     origin: (origin, callback) => {
-      // Allow requests without an Origin header
-      if (!origin || allowedOrigins.includes(origin)) {
+      // Allow requests without Origin (health checks, server-to-server).
+      if (!origin) {
         return callback(null, true);
       }
 
-      return callback(new Error(`CORS blocked for origin: ${origin}`));
+      const normalizedOrigin = origin.replace(/\/+$/, "");
+
+      if (allowedOrigins.includes(normalizedOrigin)) {
+        return callback(null, true);
+      }
+
+      console.warn(`CORS blocked origin: ${origin}`);
+      return callback(new Error("Origin not allowed by CORS"));
     },
-    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization"],
-  }),
+    methods: [
+      "GET",
+      "POST",
+      "PUT",
+      "PATCH",
+      "DELETE",
+      "OPTIONS",
+    ],
+    allowedHeaders: [
+      "Content-Type",
+      "Authorization",
+    ],
+  })
 );
 
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+// Request body middleware
+app.use(express.json({ limit: "1mb" }));
+app.use(express.urlencoded({ extended: true, limit: "1mb" }));
 
-// Routes
+// Root health check
+app.get("/", (req, res) => {
+  res.status(200).json({
+    success: true,
+    message: "RoomSaathi API is running",
+  });
+});
+
+// Render health check
+app.get("/health", (req, res) => {
+  res.status(200).json({
+    success: true,
+    status: "healthy",
+    message: "RoomSaathi backend is running",
+    timestamp: new Date().toISOString(),
+  });
+});
+
+// API routes
 app.use("/api/auth", authRoutes);
 app.use("/api/rooms", roomRoutes);
 app.use("/api/requests", requestRoutes);
@@ -121,15 +165,40 @@ app.use("/api/admin/statistics", adminStatisticsRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/admin/auth", adminAuthRoutes);
 
-// Health check
-app.get("/", (req, res) => {
-  res.status(200).json({
-    success: true,
-    message: "RoomSaathi API is running",
+// 404 handler for unknown API routes
+app.use((req, res) => {
+  res.status(404).json({
+    success: false,
+    message: `Route not found: ${req.method} ${req.originalUrl}`,
   });
 });
 
-// Start server after database connection
+// Central error handler
+app.use((err, req, res, next) => {
+  console.error("Request error:", err.message);
+
+  if (res.headersSent) {
+    return next(err);
+  }
+
+  // CORS errors
+  if (err.message === "Origin not allowed by CORS") {
+    return res.status(403).json({
+      success: false,
+      message: "This origin is not allowed",
+    });
+  }
+
+  res.status(err.status || 500).json({
+    success: false,
+    message:
+      process.env.NODE_ENV === "production"
+        ? "Internal server error"
+        : err.message,
+  });
+});
+
+// Start server only after the database connects
 const PORT = process.env.PORT || 8000;
 
 async function startServer() {
@@ -140,7 +209,7 @@ async function startServer() {
       console.log(`RoomSaathi server running on port ${PORT}`);
     });
   } catch (error) {
-    console.error("Failed to start server:", error.message);
+    console.error("Failed to start RoomSaathi:", error);
     process.exit(1);
   }
 }
