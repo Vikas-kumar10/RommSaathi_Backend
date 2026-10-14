@@ -79,28 +79,28 @@ import adminStatisticsRoutes from "./routes/adminStatistics.routes.js";
 import adminRoutes from "./routes/admin.routes.js";
 import adminAuthRoutes from "./routes/adminAuth.routes.js";
 
+// Load environment variables
 dotenv.config();
 
 const app = express();
 
-// Trust proxy when deployed behind Render's proxy.
+// Trust the hosting platform's proxy when needed
 app.set("trust proxy", 1);
 
 // Allowed frontend origins
 const allowedOrigins = [
   "http://localhost:5173",
-  "https://room-sathi-frontend.vercel.app",
   ...(process.env.CLIENT_URL || "")
     .split(",")
     .map((url) => url.trim().replace(/\/+$/, ""))
     .filter(Boolean),
 ];
 
-// CORS: register only once, before routes
+// CORS configuration — register only once
 app.use(
   cors({
     origin: (origin, callback) => {
-      // Allow requests without Origin (health checks, server-to-server).
+      // Allow requests without an Origin header
       if (!origin) {
         return callback(null, true);
       }
@@ -111,8 +111,9 @@ app.use(
         return callback(null, true);
       }
 
-      console.warn(`CORS blocked origin: ${origin}`);
-      return callback(new Error("Origin not allowed by CORS"));
+      console.error("CORS blocked origin:", origin);
+
+      return callback(new Error("Not allowed by CORS"));
     },
     methods: [
       "GET",
@@ -130,24 +131,23 @@ app.use(
 );
 
 // Request body middleware
-app.use(express.json({ limit: "1mb" }));
-app.use(express.urlencoded({ extended: true, limit: "1mb" }));
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
-// Root health check
+// Health check
+app.get("/health", (req, res) => {
+  res.status(200).json({
+    success: true,
+    message: "RoomSaathi API is running",
+    timestamp: new Date().toISOString(),
+  });
+});
+
+// Root route
 app.get("/", (req, res) => {
   res.status(200).json({
     success: true,
     message: "RoomSaathi API is running",
-  });
-});
-
-// Render health check
-app.get("/health", (req, res) => {
-  res.status(200).json({
-    success: true,
-    status: "healthy",
-    message: "RoomSaathi backend is running",
-    timestamp: new Date().toISOString(),
   });
 });
 
@@ -165,40 +165,34 @@ app.use("/api/admin/statistics", adminStatisticsRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/admin/auth", adminAuthRoutes);
 
-// 404 handler for unknown API routes
+// Not found handler
 app.use((req, res) => {
   res.status(404).json({
     success: false,
-    message: `Route not found: ${req.method} ${req.originalUrl}`,
+    message: "API route not found",
+    path: req.originalUrl,
   });
 });
 
-// Central error handler
+// Global error handler
 app.use((err, req, res, next) => {
-  console.error("Request error:", err.message);
+  console.error("Backend error:", err.message);
 
   if (res.headersSent) {
     return next(err);
   }
 
-  // CORS errors
-  if (err.message === "Origin not allowed by CORS") {
-    return res.status(403).json({
-      success: false,
-      message: "This origin is not allowed",
-    });
-  }
+  const isCorsError = err.message === "Not allowed by CORS";
 
-  res.status(err.status || 500).json({
+  res.status(isCorsError ? 403 : 500).json({
     success: false,
-    message:
-      process.env.NODE_ENV === "production"
-        ? "Internal server error"
-        : err.message,
+    message: isCorsError
+      ? "Origin is not allowed"
+      : "Internal server error",
   });
 });
 
-// Start server only after the database connects
+// Start server after successful database connection
 const PORT = process.env.PORT || 8000;
 
 async function startServer() {
@@ -209,7 +203,7 @@ async function startServer() {
       console.log(`RoomSaathi server running on port ${PORT}`);
     });
   } catch (error) {
-    console.error("Failed to start RoomSaathi:", error);
+    console.error("Failed to start server:", error.message);
     process.exit(1);
   }
 }
